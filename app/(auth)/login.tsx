@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
-import { View, StyleSheet } from 'react-native';
-import { TextInput, Button, Text, Surface } from 'react-native-paper';
-import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import axios from 'axios';
 import { router } from 'expo-router';
+import React, { useState } from 'react';
+import { StyleSheet } from 'react-native';
+import { Button, Surface, Text, TextInput } from 'react-native-paper';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -16,12 +16,12 @@ export default function LoginScreen() {
     setError('');
     try {
       // Replace with your backend endpoint
-      const response = await axios.post('http://localhost:8000/api/login', { email, password });
+      const response = await axios.post('http://192.168.0.103/parking-app/api.php?endpoint=login', { email, password });
       const { token } = response.data;
       await AsyncStorage.setItem('token', token);
       router.replace('/');
     } catch (err) {
-      setError('Login failed. Check your credentials.');
+      setError('Login failed. Check your credentials');
     } finally {
       setLoading(false);
     }

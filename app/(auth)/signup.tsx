@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
-import { View, StyleSheet } from 'react-native';
-import { TextInput, Button, Text, Surface } from 'react-native-paper';
 import axios from 'axios';
 import { router } from 'expo-router';
+import React, { useState } from 'react';
+import { StyleSheet } from 'react-native';
+import { Button, Surface, Text, TextInput } from 'react-native-paper';
 
 export default function SignupScreen() {
   const [name, setName] = useState('');
@@ -18,7 +18,7 @@ export default function SignupScreen() {
     setSuccess('');
     try {
       // Replace with your backend endpoint
-      await axios.post('http://localhost:8000/api/register', { name, email, password });
+      await axios.post('http://192.168.0.103/parking-app/api.php?endpoint=register', { name, email, password });
       setSuccess('Registration successful! You can now log in.');
       setTimeout(() => router.replace('/login'), 1500);
     } catch (err) {
