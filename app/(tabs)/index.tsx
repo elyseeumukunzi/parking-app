@@ -1,9 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Link, router } from 'expo-router';
+import { router } from 'expo-router';
 import * as React from 'react';
 import { useEffect, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
-import { Button, Surface, Text, useTheme } from 'react-native-paper';
+import { ScrollView, StyleSheet, View } from 'react-native';
+import { Surface, Text, useTheme } from 'react-native-paper';
 
 export default function IndexScreen() {
   const theme = useTheme();
@@ -31,65 +31,121 @@ export default function IndexScreen() {
   if (loading) return null;
   if (!authenticated) return null;
 
+  // Mocked dashboard data
+  const todayStats = {
+    totalCars: 120,
+    entries: 90,
+    exits: 80,
+    revenue: 35000, // in local currency
+    busiestHour: '10:00 - 11:00',
+  };
+  const availableLocations = [
+    { name: 'Main Market', available: 12, total: 50 },
+    { name: 'Bus Park', available: 3, total: 30 },
+    { name: 'Mall Parking', available: 20, total: 40 },
+  ];
+  const now = new Date();
+
   return (
-    <Surface style={styles.container} elevation={4}>
-      <View style={styles.content}>
-        <Text variant="headlineLarge" style={styles.title}>
-         MUSESU Parking
+    <ScrollView contentContainerStyle={styles.scrollContent}>
+      <Surface style={styles.container} elevation={4}>
+        <Text variant="headlineLarge" style={styles.title}>MUSESU Parking Dashboard</Text>
+        <Text variant="bodyLarge" style={styles.subtitle}>
+          {now.toLocaleDateString()} | {now.toLocaleTimeString()}
         </Text>
-        <Text variant="bodyLarge" style={styles.description}>
-          Musesu LTD NI COMPANY Ifite imirimo you gucunga umutekano wibinyabiziga bi parika kumasoko nizindi nyubako zihuriraho abantu benshi,
-          Iyi sysytem yifashishwa mu gucunga ndetse no gutanga amakuru ajyanye na Parking
-        </Text>
-      </View>
-      <View style={styles.buttonRow}>
-        <Link href="/login" asChild>
-          <Button mode="contained" style={styles.button}>
-            Injira
-          </Button>
-        </Link>
-        <Link href="/signup" asChild>
-          <Button mode="outlined" style={styles.button}>
-            Iyandikishe
-          </Button>
-        </Link>
-      </View>
-    </Surface>
+
+        {/* Statistics Cards */}
+        <View style={styles.cardRow}>
+          <Surface style={styles.card} elevation={2}>
+            <Text variant="titleMedium">Total Cars Today</Text>
+            <Text variant="displaySmall" style={styles.stat}>{todayStats.totalCars}</Text>
+          </Surface>
+          <Surface style={styles.card} elevation={2}>
+            <Text variant="titleMedium">Entries</Text>
+            <Text variant="displaySmall" style={styles.stat}>{todayStats.entries}</Text>
+          </Surface>
+          <Surface style={styles.card} elevation={2}>
+            <Text variant="titleMedium">Exits</Text>
+            <Text variant="displaySmall" style={styles.stat}>{todayStats.exits}</Text>
+          </Surface>
+        </View>
+
+        <View style={styles.cardRow}>
+          <Surface style={styles.card} elevation={2}>
+            <Text variant="titleMedium">Today's Revenue</Text>
+            <Text variant="displaySmall" style={styles.stat}>{todayStats.revenue} RWF</Text>
+          </Surface>
+          <Surface style={styles.card} elevation={2}>
+            <Text variant="titleMedium">Busiest Hour</Text>
+            <Text variant="displaySmall" style={styles.stat}>{todayStats.busiestHour}</Text>
+          </Surface>
+        </View>
+
+        {/* Available Parking Locations */}
+        <Text variant="titleMedium" style={{marginTop: 24, marginBottom: 8}}>Available Parking Locations</Text>
+        <View style={styles.locationList}>
+          {availableLocations.map((loc, idx) => (
+            <Surface key={idx} style={styles.locationCard} elevation={1}>
+              <Text variant="bodyLarge" style={{fontWeight: 'bold'}}>{loc.name}</Text>
+              <Text variant="bodyMedium">Available: <Text style={{color: 'green'}}>{loc.available}</Text> / {loc.total}</Text>
+            </Surface>
+          ))}
+        </View>
+      </Surface>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
+  scrollContent: {
+    flexGrow: 1,
+    paddingVertical: 24,
+    backgroundColor: '#fff',
+  },
   container: {
     flex: 1,
-    justifyContent: 'space-between',
     backgroundColor: '#fff',
     padding: 24,
   },
-  content: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingTop: 60,
-  },
   title: {
-    marginBottom: 24,
+    marginBottom: 12,
     fontWeight: 'bold',
     textAlign: 'center',
   },
-  description: {
+  subtitle: {
     textAlign: 'center',
     color: '#666',
     marginBottom: 16,
-    paddingHorizontal: 12,
   },
-  buttonRow: {
+  cardRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 32,
-    gap: 16,
+    marginBottom: 16,
+    gap: 12,
   },
-  button: {
+  card: {
     flex: 1,
     marginHorizontal: 4,
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    backgroundColor: '#f7f7fa',
+  },
+  stat: {
+    fontWeight: 'bold',
+    color: '#0a4d1a',
+    marginTop: 8,
+  },
+  locationList: {
+    gap: 10,
+  },
+  locationCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 12,
+    marginBottom: 8,
+    borderRadius: 10,
+    backgroundColor: '#e6f2ff',
   },
 });
