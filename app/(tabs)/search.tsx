@@ -1,58 +1,7 @@
 import * as React from 'react';
-import { Keyboard, ScrollView, StyleSheet } from 'react-native';
+import { Keyboard, ScrollView, StyleSheet, View } from 'react-native';
 import { Button, Card, Surface, Text, TextInput } from 'react-native-paper';
-
-// Mocked parking data
-const MOCKED_PARKING_DATA = [
-  {
-    plate: 'ABC123',
-    owner: 'John Doe',
-    parkingLocation: 'Downtown Lot 3',
-    timeIn: '2025-07-14 08:30',
-    timeOut: '2025-07-14 17:00',
-    vehicle: 'Toyota Corolla',
-    payment: '200',
-    status: 'paid',
-    date: '2025-07-14',
-    parkingStatus: 'active',
-  },
-  {
-    plate: 'ABC123',
-    owner: 'John Doe',
-    parkingLocation: 'Downtown Lot 3',
-    timeIn: '2025-07-14 08:30',
-    timeOut: '2025-07-14 17:00',
-    vehicle: 'Toyota Corolla',
-    payment: '200',
-    status: 'paid',
-    date: '2025-07-14',
-    parkingStatus: 'completed',
-  },
-  {
-    plate: 'ABC123',
-    owner: 'John Doe',
-    parkingLocation: 'Mall Parking',
-    timeIn: '2025-07-13 09:00',
-    timeOut: '2025-07-13 12:00',
-    vehicle: 'Toyota Corolla',
-    payment: '150',
-    status: 'paid',
-    date: '2025-07-13',
-    parkingStatus: 'completed',
-  },
-  {
-    plate: 'XYZ789',
-    owner: 'Jane Smith',
-    parkingLocation: 'Airport Lot',
-    timeIn: '2025-07-14 10:00',
-    timeOut: '2025-07-14 18:00',
-    vehicle: 'Honda Fit',
-    payment: '250',
-    status: 'unpaid',
-    date: '2025-07-14',
-    parkingStatus: 'active',
-  },
-];
+import CONFIG from '../config';
 
 export default function SearchScreen() {
   const [editingIdx, setEditingIdx] = React.useState<number | null>(null);
@@ -62,26 +11,53 @@ export default function SearchScreen() {
   const [results, setResults] = React.useState<any[]>([]);
   const [searched, setSearched] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
-  const [localResults, setLocalResults] = React.useState<any[]>([]); // for status change
+  const [localResults, setLocalResults] = React.useState<any[]>([]);
   const [statusChanged, setStatusChanged] = React.useState(false);
 
   React.useEffect(() => {
-    // Keep local copy for status changes
     setLocalResults(results.map(r => ({ ...r })));
   }, [results]);
 
-  const handleSearch = () => {
+  const handleSearch = async () => {
     Keyboard.dismiss();
     setLoading(true);
-    setTimeout(() => {
-      const found = MOCKED_PARKING_DATA.filter(
-        (entry) => entry.plate.toUpperCase() === plate.trim().toUpperCase()
+    setSearched(false);
+
+    try {
+      const response = await fetch(
+        `${CONFIG.API_BASE_URL}get_parking&plate_number=${plate.trim()}`
       );
-      setResults(found);
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch data');
+      }
+
+      const data = await response.json();
+
+      const formattedData = data.map((item: any) => ({
+        plate: item.plate_number,
+        owner: item.owner || 'Unknown',
+        parkingLocation: item.location_name || 'N/A',
+        timeIn: `${item.arrival_date} ${item.arrival_time}`,
+        timeOut: item.departure_date && item.departure_time
+          ? `${item.departure_date} ${item.departure_time}`
+          : '',
+        vehicle: item.category || 'Vehicle',
+        payment: item.charges || '0',
+        status: item.payment_status,
+        date: item.arrival_date,
+        parkingStatus: item.parking_status,
+      }));
+
+      setResults(formattedData);
+    } catch (error) {
+      console.error('Error fetching parking data:', error);
+      setResults([]);
+    } finally {
       setSearched(true);
       setLoading(false);
       setStatusChanged(false);
-    }, 600);
+    }
   };
 
   const handleEdit = (idx: number, result: any) => {
@@ -111,34 +87,33 @@ export default function SearchScreen() {
     setStatusChanged(true);
   };
 
-
-
-
-  // Calculate unpaid summary
   const unpaidRecords = localResults.filter(r => r.status === 'unpaid');
   const totalUnpaid = unpaidRecords.reduce((sum, r) => sum + Number(r.payment), 0);
 
   return (
-    <Surface style={styles.container} elevation={2}>
+    <Surface style={styles.container}>
       <Text variant="headlineMedium" style={styles.title}>Search Parking by Plate</Text>
+
       <TextInput
         label="Plate Number"
         value={plate}
         onChangeText={setPlate}
         mode="outlined"
-        style={styles.input}
         autoCapitalize="characters"
+        style={styles.input}
         left={<TextInput.Icon icon="car" />}
       />
+
       <Button
         mode="contained"
         onPress={handleSearch}
         loading={loading}
-        style={styles.button}
         disabled={!plate.trim()}
+        style={styles.button}
       >
         Search
       </Button>
+
       <ScrollView style={{ flex: 1 }}>
         {searched && unpaidRecords.length > 0 && !loading && (
           <Card style={styles.unpaidCard}>
@@ -149,14 +124,15 @@ export default function SearchScreen() {
             </Card.Content>
           </Card>
         )}
+
         {searched && localResults.length === 0 && !loading && (
           <Text style={styles.noResult}>No parking info found for this plate.</Text>
         )}
+
         {localResults.map((result, idx) => {
-          let parkingStatus = result.parkingStatus || 'active';
           const isEditing = editingIdx === idx;
           return (
-            <Card style={styles.resultCard} key={idx}>
+            <Card key={idx} style={styles.resultCard}>
               <Card.Title title={result.vehicle} subtitle={`Owner: ${result.owner}`} />
               <Card.Content>
                 <Text>Plate: {result.plate}</Text>
@@ -165,50 +141,65 @@ export default function SearchScreen() {
                 <Text>Time In: {result.timeIn}</Text>
                 <Text>Time Out: {result.timeOut}</Text>
                 <Text>Payment: {result.payment} RWF ({result.status})</Text>
-                <Text>Parking Status: {parkingStatus}</Text>
-                {parkingStatus === 'active' && !isEditing && (
+                <Text>Parking Status: {result.parkingStatus}</Text>
+
+                {!isEditing && result.parkingStatus === 'active' && (
                   <Button
                     mode="contained"
                     onPress={() => handleEdit(idx, result)}
                     style={styles.statusButton}
                   >
-                    Remove Vehicle from Parking
+                    Remove Vehicle
                   </Button>
                 )}
+
                 {isEditing && (
-                  <>
-                    <Text style={{marginTop: 10}}>Confirm Departure Details:</Text>
+                  <View>
+                    <Text style={{ marginTop: 10 }}>Confirm Departure:</Text>
                     <TextInput
                       label="Time Out"
                       value={editTimeOut}
                       onChangeText={setEditTimeOut}
                       mode="outlined"
-                      style={{marginTop: 8}}
+                      style={{ marginTop: 8 }}
                     />
-                    <Text style={{marginTop: 8}}>Payment Status</Text>
+
+                    <Text style={{ marginTop: 8 }}>Payment Status</Text>
                     <Button
                       mode={editPaymentStatus === 'paid' ? 'contained' : 'outlined'}
                       onPress={() => setEditPaymentStatus('paid')}
-                      style={{marginTop: 6, marginRight: 8, alignSelf: 'flex-start'}}
-                    >Paid</Button>
+                      style={{ marginTop: 6, marginRight: 8 }}
+                    >
+                      Paid
+                    </Button>
                     <Button
                       mode={editPaymentStatus === 'unpaid' ? 'contained' : 'outlined'}
                       onPress={() => setEditPaymentStatus('unpaid')}
-                      style={{marginTop: 6, alignSelf: 'flex-start'}}
-                    >Unpaid</Button>
+                      style={{ marginTop: 6 }}
+                    >
+                      Unpaid
+                    </Button>
+
                     <Button
                       mode="contained"
                       onPress={() => handleConfirm(idx)}
-                      style={{marginTop: 12, alignSelf: 'flex-start'}}
-                    >Confirm Remove</Button>
+                      style={{ marginTop: 12 }}
+                    >
+                      Confirm Remove
+                    </Button>
                     <Button
                       mode="text"
                       onPress={handleCancel}
-                      style={{marginTop: 4, alignSelf: 'flex-start'}}
-                    >Cancel</Button>
-                  </>
+                      style={{ marginTop: 4 }}
+                    >
+                      Cancel
+                    </Button>
+                  </View>
                 )}
-                {statusChanged && editingIdx === null && <Text style={{ color: 'green', marginTop: 4 }}>Status updated!</Text>}
+
+                {statusChanged && editingIdx === null && (
+                  <Text style={{ color: 'green', marginTop: 4 }}>Status updated locally.</Text>
+                )}
               </Card.Content>
             </Card>
           );
@@ -227,7 +218,6 @@ const styles = StyleSheet.create({
   title: {
     marginBottom: 24,
     textAlign: 'center',
-    fontWeight: 'bold',
   },
   input: {
     marginBottom: 16,

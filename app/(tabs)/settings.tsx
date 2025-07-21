@@ -1,12 +1,22 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { router } from 'expo-router';
 import * as React from 'react';
-import { View, StyleSheet } from 'react-native';
-import { Surface, Text, TextInput, Button, Divider } from 'react-native-paper';
+import { StyleSheet } from 'react-native';
+import { Button, Divider, Surface, Text, TextInput } from 'react-native-paper';
 
 export default function SettingsScreen() {
   const [username, setUsername] = React.useState('');
   const [password, setPassword] = React.useState('');
   const [newUser, setNewUser] = React.useState('');
   const [newUserPassword, setNewUserPassword] = React.useState('');
+
+   const handleLogout = async () => {
+    await AsyncStorage.removeItem('authToken'); // Remove stored token
+    router.replace('/login'); // Redirect to login screen
+  };
+  const handleAddUser = async () => {
+
+  };
 
   return (
     <Surface style={styles.container} elevation={2}>
@@ -46,11 +56,11 @@ export default function SettingsScreen() {
         mode="outlined"
         secureTextEntry
       />
-      <Button mode="contained" style={styles.button} onPress={() => {}}>
+      <Button mode="contained" style={styles.button}  onPress={handleAddUser}>
         Add User
       </Button>
       <Divider style={{ marginVertical: 20 }} />
-      <Button mode="outlined" style={styles.logoutButton} onPress={() => {}}>
+      <Button mode="outlined" style={styles.logoutButton}  onPress={handleLogout} >
         Logout
       </Button>
     </Surface>
