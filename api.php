@@ -181,7 +181,25 @@ if ($endpoint === 'get_parking') {
     echo json_encode($data);
     exit();
 }
+if ($endpoint === 'remove_parking') {
+    $data = getJsonInput();
+    $plate = $data['plate_number'] ?? null;
+    $parkingStatus = $data['parking_status'];
+    $paymentStatus = $data['payment_status'] ?? 'unpaid';
+    $departureTime = $data['departure_time'] ?? date('H:i:s');
 
+    $departureDate = date('Y-m-d');
+    $parkingId = $data['parking_id'];
+
+      
+        $stmt = $mysqli->prepare("UPDATE parkings SET parking_status = ?, departure_time = ?, payment_status = ?  WHERE id = ?");
+        $stmt->execute(array($parkingStatus, $departureTime, $paymentStatus, $parkingId));
+        echo json_encode(['message' => 'Parking status updated.']);
+    
+    exit;
+
+
+}
 
 http_response_code(404);
 echo json_encode(['error' => 'Endpoint not found']);

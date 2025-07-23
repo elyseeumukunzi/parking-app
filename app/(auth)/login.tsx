@@ -30,7 +30,7 @@ export default function LoginScreen() {
       await AsyncStorage.setItem('authToken', token);
       await AsyncStorage.setItem('userId', userId.toString());
       //console.log(AsyncStorage.getItem('token'));
-      router.replace('/');
+      router.replace('../(tabs)/search'); // Navigate to search screen after successful login
     } catch (err) {
       setError('Login failed. Check your credentials. ' + err.message);
     } finally {

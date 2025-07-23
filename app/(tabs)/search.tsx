@@ -1,3 +1,4 @@
+import axios from 'axios';
 import * as React from 'react';
 import { Keyboard, ScrollView, StyleSheet, View } from 'react-native';
 import { Button, Card, Surface, Text, TextInput } from 'react-native-paper';
@@ -13,6 +14,7 @@ export default function SearchScreen() {
   const [loading, setLoading] = React.useState(false);
   const [localResults, setLocalResults] = React.useState<any[]>([]);
   const [statusChanged, setStatusChanged] = React.useState(false);
+  const [parkingId, setParkingId] = React.useState('');
 
   React.useEffect(() => {
     setLocalResults(results.map(r => ({ ...r })));
@@ -33,11 +35,14 @@ export default function SearchScreen() {
       }
 
       const data = await response.json();
+      
+      
 
       const formattedData = data.map((item: any) => ({
         plate: item.plate_number,
+        parkingId: item.id,
         owner: item.owner || 'Unknown',
-        parkingLocation: item.location_name || 'N/A',
+        parkingLocation: item.location|| 'N/A',
         timeIn: `${item.arrival_date} ${item.arrival_time}`,
         timeOut: item.departure_date && item.departure_time
           ? `${item.departure_date} ${item.departure_time}`
@@ -45,11 +50,12 @@ export default function SearchScreen() {
         vehicle: item.category || 'Vehicle',
         payment: item.charges || '0',
         status: item.payment_status,
-        date: item.arrival_date,
+        date: item.arrival_dates,
         parkingStatus: item.parking_status,
       }));
 
       setResults(formattedData);
+      setParkingId(formattedData[0]?.parkingId || '');
     } catch (error) {
       console.error('Error fetching parking data:', error);
       setResults([]);
@@ -72,20 +78,40 @@ export default function SearchScreen() {
     setEditPaymentStatus('paid');
   };
 
-  const handleConfirm = (idx: number) => {
+const handleConfirm = async (idx: number) => {
+  const updatedEntry = {
+    ...localResults[idx],
+    timeOut: editTimeOut,
+    status: editPaymentStatus,
+    parkingStatus: 'completed',
+    parking_id: parkingId,
+  };
+
+  try {
+    // Update the local state first
     setLocalResults(prev => {
       const updated = [...prev];
-      updated[idx] = {
-        ...updated[idx],
-        timeOut: editTimeOut,
-        status: editPaymentStatus,
-        parkingStatus: 'completed',
-      };
+      updated[idx] = updatedEntry;
       return updated;
     });
+
+    // Send to API
+    const response = await axios.post(`${CONFIG.API_BASE_URL}remove_parking`, {
+      plate_number: updatedEntry.plate,
+      parking_id: updatedEntry.parkingId,
+      departure_time: updatedEntry.timeOut,
+      payment_status: updatedEntry.status,
+      parking_status: updatedEntry.parkingStatus,
+    });
+
+    console.log('Update response:', response.data);
+
     setEditingIdx(null);
     setStatusChanged(true);
-  };
+  } catch (error) {
+    console.error('Error updating departure info:', error);
+  }
+};
 
   const unpaidRecords = localResults.filter(r => r.status === 'unpaid');
   const totalUnpaid = unpaidRecords.reduce((sum, r) => sum + Number(r.payment), 0);
@@ -103,6 +129,8 @@ export default function SearchScreen() {
         style={styles.input}
         left={<TextInput.Icon icon="car" />}
       />
+      
+
 
       <Button
         mode="contained"
@@ -133,15 +161,15 @@ export default function SearchScreen() {
           const isEditing = editingIdx === idx;
           return (
             <Card key={idx} style={styles.resultCard}>
-              <Card.Title title={result.vehicle} subtitle={`Owner: ${result.owner}`} />
+              <Card.Title title={result.vehicle} subtitle={`AMAKURU YIKINYABIZIGA:`} />
               <Card.Content>
-                <Text>Plate: {result.plate}</Text>
-                <Text>Parking Location: {result.parkingLocation}</Text>
-                <Text>Date: {result.date}</Text>
-                <Text>Time In: {result.timeIn}</Text>
-                <Text>Time Out: {result.timeOut}</Text>
-                <Text>Payment: {result.payment} RWF ({result.status})</Text>
-                <Text>Parking Status: {result.parkingStatus}</Text>
+                <Text>PlaKe: {result.plate}</Text>
+                <Text>Aho yaparitse: {result.parkingLocation}</Text>
+                <Text>Itariki: {result.date}</Text>
+                <Text>Igihe yinjiriye: {result.timeIn}</Text>
+                <Text>Igihe yasohokeye: {result.timeOut}</Text>
+                <Text>Ubwishyu: {result.payment} RWF ({result.status})</Text>
+                <Text>Status: {result.parkingStatus}</Text>
 
                 {!isEditing && result.parkingStatus === 'active' && (
                   <Button
@@ -149,13 +177,21 @@ export default function SearchScreen() {
                     onPress={() => handleEdit(idx, result)}
                     style={styles.statusButton}
                   >
-                    Remove Vehicle
+                    KURAMO
                   </Button>
                 )}
 
                 {isEditing && (
                   <View>
                     <Text style={{ marginTop: 10 }}>Confirm Departure:</Text>
+                    <TextInput
+                      label="Parking Id"
+                      value={parkingId}
+                      onChangeText={setParkingId}
+                      mode="outlined"
+                      style={{ marginTop: 8 }}
+                    />
+
                     <TextInput
                       label="Time Out"
                       value={editTimeOut}
@@ -170,14 +206,14 @@ export default function SearchScreen() {
                       onPress={() => setEditPaymentStatus('paid')}
                       style={{ marginTop: 6, marginRight: 8 }}
                     >
-                      Paid
+                      Yishyuye
                     </Button>
                     <Button
                       mode={editPaymentStatus === 'unpaid' ? 'contained' : 'outlined'}
                       onPress={() => setEditPaymentStatus('unpaid')}
                       style={{ marginTop: 6 }}
                     >
-                      Unpaid
+                      Ntiyishyuye
                     </Button>
 
                     <Button
@@ -185,7 +221,7 @@ export default function SearchScreen() {
                       onPress={() => handleConfirm(idx)}
                       style={{ marginTop: 12 }}
                     >
-                      Confirm Remove
+                      EMEZA GUKURAMO
                     </Button>
                     <Button
                       mode="text"
@@ -198,7 +234,7 @@ export default function SearchScreen() {
                 )}
 
                 {statusChanged && editingIdx === null && (
-                  <Text style={{ color: 'green', marginTop: 4 }}>Status updated locally.</Text>
+                  <Text style={{ color: 'green', marginTop: 4 }}>Byegenze neza.</Text>
                 )}
               </Card.Content>
             </Card>
