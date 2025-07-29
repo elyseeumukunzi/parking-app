@@ -19,6 +19,12 @@ function getJsonInput()
 
 $endpoint = isset($_GET['endpoint']) ? $_GET['endpoint'] : '';
 
+// Helper function to validate and format date
+function validateDate($date, $format = 'Y-m-d') {
+    $d = DateTime::createFromFormat($format, $date);
+    return $d && $d->format($format) === $date;
+}
+
 if ($endpoint === 'register') {
     $data = getJsonInput();
     $name = $mysqli->real_escape_string($data['name'] ?? '');
@@ -112,7 +118,7 @@ if ($endpoint === 'save_parking') {
         $vehicle_id = $vehicle['id'];
     } else {
 
-        $insertVehicle = $mysqli->prepare("INSERT INTO vehicles (plate_number, phone, category_id, client_id ) VALUES (?,?,?,?)");
+        $insertVehicle = $mysqli->prepare("INSERT INTO vehicles (plate_number, phone, category_id, client_id) VALUES (?,?,?,?)");
         $insertVehicle->execute(array($plate_number, $phone, $category_id, $user_id));
         if (!$insertVehicle) {
             http_response_code(500);
@@ -122,8 +128,8 @@ if ($endpoint === 'save_parking') {
         $vehicle_id = $insertVehicle->insert_id;
 
     }
-    $insertParking = $mysqli->prepare("INSERT INTO parkings (vehicle_id, location_id, arrival_dates, arrival_time, departure_dates, departure_time, parking_status, charges, payment_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
-    $insertParking->execute(array($vehicle_id, $location_id, $arrival_date, $arrival_time, $departure_date, $departure_time, $parking_status, $charges, $payment_status));
+    $insertParking = $mysqli->prepare("INSERT INTO parkings (vehicle_id, location_id, arrival_dates, arrival_time, departure_dates, departure_time, parking_status, charges,user_id, payment_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    $insertParking->execute(array($vehicle_id, $location_id, $arrival_date, $arrival_time, $departure_date, $departure_time, $parking_status, $charges, $payment_status,$user_id));
 
     if ($insertParking) {
         echo json_encode(["success" => true, "message" => "Parking registered successfully"]);
@@ -201,5 +207,128 @@ if ($endpoint === 'remove_parking') {
 
 }
 
-http_response_code(404);
-echo json_encode(['error' => 'Endpoint not found']);
+} elseif ($endpoint === 'user_report') {
+    $data = getJsonInput();
+    $user_id = intval($data['user_id'] ?? 0);
+    $from_date = $data['from_date'] ?? '';
+    $to_date = $data['to_date'] ?? '';
+
+    // Validate required fields
+    if (!$user_id) {
+        http_response_code(400);
+        echo json_encode(['error' => 'User ID is required']);
+        exit();
+    }
+
+    // Validate dates if provided
+    if ($from_date && !validateDate($from_date)) {
+        http_response_code(400);
+        echo json_encode(['error' => 'Invalid from_date format. Use YYYY-MM-DD']);
+        exit();
+    }
+
+    if ($to_date && !validateDate($to_date)) {
+        http_response_code(400);
+        echo json_encode(['error' => 'Invalid to_date format. Use YYYY-MM-DD']);
+        exit();
+    }
+
+    // Build the query
+    $query = "SELECT 
+                p.id, 
+                v.plate_number, 
+                CONCAT(p.arrival_dates, ' ', p.arrival_time) as time_in, 
+                CONCAT(p.departure_dates, ' ', p.departure_time) as time_out, 
+                p.payment_status,
+                p.charges as amount_paid,
+                u.name as user_name,
+                l.location as parking_location
+              FROM parkings p
+              JOIN vehicles v ON p.vehicle_id = v.id
+              JOIN users u ON v.client_id = u.id
+              LEFT JOIN locations l ON p.location_id = l.id
+              WHERE v.client_id = ?";
+    
+    $params = [];
+    $types = "i"; // i for integer (user_id)
+    $params[] = &$user_id;
+
+    // Add date range conditions if provided
+    if ($from_date) {
+        $query .= " AND p.arrival_dates >= ?";
+        $types .= "s"; // s for string (date)
+        $params[] = &$from_date;
+    }
+    
+    if ($to_date) {
+        $query .= " AND p.departure_dates <= ?";
+        $types .= "s"; // s for string (date)
+        $to_date_with_time = $to_date . ' 23:59:59'; // Include the entire end day
+        $params[] = &$to_date_with_time;
+    }
+
+    $query .= " ORDER BY p.arrival_dates DESC, p.arrival_time DESC";
+
+    // Prepare and execute the statement
+    $stmt = $mysqli->prepare($query);
+    
+    if (!$stmt) {
+        http_response_code(500);
+        echo json_encode(['error' => 'Database error: ' . $mysqli->error]);
+        exit();
+    }
+
+    // Bind parameters
+    if (count($params) > 0) {
+        $stmt->bind_param($types, ...$params);
+    }
+
+    // Execute query
+    $stmt->execute();
+    $result = $stmt->get_result();
+    
+    if (!$result) {
+        http_response_code(500);
+        echo json_encode(['error' => 'Failed to fetch report data']);
+        exit();
+    }
+
+    // Format the results
+    $report_data = [];
+    $total_entries = 0;
+    $total_revenue = 0;
+    
+    while ($row = $result->fetch_assoc()) {
+        $report_data[] = [
+            'id' => $row['id'],
+            'plate_number' => $row['plate_number'],
+            'time_in' => $row['time_in'],
+            'time_out' => $row['time_out'],
+            'payment_status' => $row['payment_status'],
+            'amount_paid' => (float)$row['amount_paid'],
+            'user_name' => $row['user_name'],
+            'location' => $row['parking_location']
+        ];
+        
+        $total_entries++;
+        $total_revenue += (float)$row['amount_paid'];
+    }
+
+    // Return the report data
+    echo json_encode([
+        'success' => true,
+        'data' => $report_data,
+        'summary' => [
+            'total_entries' => $total_entries,
+            'total_revenue' => $total_revenue,
+            'date_range' => [
+                'from' => $from_date,
+                'to' => $to_date
+            ]
+        ]
+    ]);
+    exit();
+} else {
+    http_response_code(404);
+    echo json_encode(['error' => 'Endpoint not found']);
+}

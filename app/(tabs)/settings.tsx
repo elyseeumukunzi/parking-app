@@ -9,6 +9,11 @@ export default function SettingsScreen() {
   const [password, setPassword] = React.useState('');
   const [newUser, setNewUser] = React.useState('');
   const [newUserPassword, setNewUserPassword] = React.useState('');
+  const [isAdmin] = React.useState(true); // In a real app, this would come from your auth context/state
+
+  const navigateToReports = () => {
+    router.push('/(auth)/reports');
+  };
 
    const handleLogout = async () => {
     await AsyncStorage.removeItem('authToken'); // Remove stored token
@@ -60,7 +65,25 @@ export default function SettingsScreen() {
         Add User
       </Button>
       <Divider style={{ marginVertical: 20 }} />
-      <Button mode="outlined" style={styles.logoutButton}  onPress={handleLogout} >
+      {isAdmin && (
+        <Button 
+          mode="outlined" 
+          style={[styles.button, { marginTop: 16 }]} 
+          onPress={navigateToReports}
+          icon="file-chart"
+        >
+          REBA RAPORO
+        </Button>
+      )}
+
+      <Divider style={{ marginVertical: 20 }} />
+      
+      <Button 
+        mode="outlined" 
+        style={[styles.logoutButton, { marginTop: 8 }]} 
+        onPress={handleLogout}
+        icon="logout"
+      >
         Logout
       </Button>
     </Surface>
@@ -90,5 +113,13 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     borderColor: 'red',
     borderWidth: 1,
+  },
+  accordion: {
+    backgroundColor: '#f5f5f5',
+    borderRadius: 4,
+    marginBottom: 8,
+  },
+  listItem: {
+    paddingLeft: 16,
   },
 });
