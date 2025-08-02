@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import * as React from 'react';
-import { StyleSheet } from 'react-native';
+import { StyleSheet, ScrollView } from 'react-native';
 import { Button, Divider, Surface, Text, TextInput } from 'react-native-paper';
 
 export default function SettingsScreen() {
@@ -24,7 +24,8 @@ export default function SettingsScreen() {
   };
 
   return (
-    <Surface style={styles.container} elevation={2}>
+    <ScrollView contentContainerStyle={styles.container}>
+      <Surface style={styles.surface} elevation={2}>
       <Text variant="headlineMedium" style={styles.title}>Settings</Text>
       <TextInput
         label="Username"
@@ -86,7 +87,8 @@ export default function SettingsScreen() {
       >
         Logout
       </Button>
-    </Surface>
+      </Surface>
+    </ScrollView>
   );
 }
 
@@ -122,4 +124,9 @@ const styles = StyleSheet.create({
   listItem: {
     paddingLeft: 16,
   },
+  surface: {
+    padding: 24,
+    backgroundColor: '#fff',
+    borderRadius: 4,
+  }
 });

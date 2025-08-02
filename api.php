@@ -207,7 +207,7 @@ if ($endpoint === 'remove_parking') {
 
 }
 
-} elseif ($endpoint === 'user_report') {
+if ($endpoint === 'user_report') {
     $data = getJsonInput();
     $user_id = intval($data['user_id'] ?? 0);
     $from_date = $data['from_date'] ?? '';
@@ -328,7 +328,29 @@ if ($endpoint === 'remove_parking') {
         ]
     ]);
     exit();
-} else {
-    http_response_code(404);
-    echo json_encode(['error' => 'Endpoint not found']);
 }
+
+if ($endpoint === 'list_users') {
+    // Retrieve all users
+    $result = $mysqli->query("SELECT id, name, email FROM users ORDER BY name ASC");
+    if (!$result) {
+        http_response_code(500);
+        echo json_encode(['error' => 'Database error: ' . $mysqli->error]);
+        exit();
+    }
+
+    $users = [];
+    while ($row = $result->fetch_assoc()) {
+        $users[] = [
+            'id' => (int)$row['id'],
+            'name' => $row['name'],
+            'email' => $row['email']
+        ];
+    }
+
+    echo json_encode(['success' => true, 'data' => $users]);
+    exit();
+}
+
+http_response_code(404);
+echo json_encode(['error' => 'Endpoint not found']);

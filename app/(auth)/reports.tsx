@@ -1,8 +1,9 @@
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { format } from 'date-fns';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { Button, List, Surface, Text, TextInput, useTheme } from 'react-native-paper';
+import CONFIG from '../config';
 
 // Types
 type User = {
@@ -11,45 +12,44 @@ type User = {
   email: string;
 };
 
-type Report = {
+// Parking record returned by backend
+interface ParkingRecord {
   id: number;
-  date: string;
-  entries: number;
-  exits: number;
-  revenue: number;
-};
+  plate_number: string;
+  time_in: string;
+  time_out: string | null;
+  payment_status: string;
+  amount_paid: number;
+  location: string | null;
+}
 
-type ReportsData = {
-  [key: number]: Report[];
-};
+// Summary structure returned by backend (optional)
+interface ReportSummary {
+  total_entries: number;
+  total_revenue: number;
+  date_range: {
+    from: string;
+    to: string;
+  };
+}
 
-// Mock data for users
-const MOCK_USERS: User[] = [
-  { id: 1, name: 'John Doe', email: 'john@example.com' },
-  { id: 2, name: 'Jane Smith', email: 'jane@example.com' },
-  { id: 3, name: 'Admin User', email: 'admin@example.com' },
-  { id: 4, name: 'Test User', email: 'test@example.com' },
-];
 
-// Mock report data
-const MOCK_REPORTS: ReportsData = {
-  1: [
-    { id: 1, date: '2025-07-28', entries: 5, exits: 4, revenue: 5000 },
-    { id: 2, date: '2025-07-27', entries: 3, exits: 3, revenue: 3000 },
-  ],
-  2: [
-    { id: 3, date: '2025-07-28', entries: 7, exits: 7, revenue: 7000 },
-  ],
-};
+
+// Users will be fetched from the API
+
+// Parking data will be fetched dynamically from the API when the admin taps "Generate"
 
 export default function ReportsScreen() {
   const theme = useTheme();
+  const [users, setUsers] = useState<User[]>([]);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [fromDate, setFromDate] = useState<Date | null>(null);
   const [toDate, setToDate] = useState<Date | null>(null);
   const [showFromDatePicker, setShowFromDatePicker] = useState(false);
   const [showToDatePicker, setShowToDatePicker] = useState(false);
+  const [reportData, setReportData] = useState<ParkingRecord[]>([]);
+  const [summary, setSummary] = useState<ReportSummary | null>(null);
 
   const onFromDateChange = (event: any, selectedDate?: Date) => {
     setShowFromDatePicker(Platform.OS === 'ios');
@@ -69,17 +69,54 @@ export default function ReportsScreen() {
     return date ? format(date, 'yyyy-MM-dd') : '';
   };
 
-  const filteredUsers = MOCK_USERS.filter((user: User) =>
+  // Fetch users once component mounts
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const response = await fetch(`${CONFIG.API_BASE_URL}list_users`);
+        const json = await response.json();
+        if (json.success) {
+          setUsers(json.data);
+        } else {
+          console.warn('Failed to fetch users', json);
+        }
+      } catch (error) {
+        console.error('Error fetching users', error);
+      }
+    };
+    fetchUsers();
+  }, []);
+
+  const filteredUsers = users.filter((user: User) =>
     user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     user.email.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const userReports = selectedUser ? (MOCK_REPORTS[selectedUser.id as keyof typeof MOCK_REPORTS] || []) : [];
-  const selectedUserData = MOCK_USERS.find((u: User) => u.id === selectedUser?.id);
+  const selectedUserData = users.find((u: User) => u.id === selectedUser?.id);
 
-  const generateReport = () => {
-    // In a real app, this would fetch the report data from your API
-    console.log('Generating report for:', selectedUser, 'from', fromDate, 'to', toDate);
+  const generateReport = async () => {
+    if (!selectedUser) return;
+    try {
+      const body = {
+        user_id: selectedUser.id,
+        from_date: fromDate ? format(fromDate, 'yyyy-MM-dd') : '',
+        to_date: toDate ? format(toDate, 'yyyy-MM-dd') : ''
+      };
+      const response = await fetch(`${CONFIG.API_BASE_URL}user_report`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      const json = await response.json();
+      if (json.success) {
+        setReportData(json.data as ParkingRecord[]);
+        setSummary(json.summary as ReportSummary);
+      } else {
+        console.warn('Failed to fetch report', json);
+      }
+    } catch (error) {
+      console.error('Error fetching report', error);
+    }
   };
 
   return (
@@ -158,7 +195,7 @@ export default function ReportsScreen() {
                   mode="date"
                   display={Platform.OS === 'ios' ? 'spinner' : 'default'}
                   onChange={onToDateChange}
-                  minimumDate={fromDate}
+                  minimumDate={fromDate ?? undefined}
                   maximumDate={new Date()}
                 />
               )}
@@ -174,22 +211,30 @@ export default function ReportsScreen() {
             Kurura amakuru
           </Button>
 
-          {userReports.length > 0 && (
+          {reportData.length > 0 && (
             <View style={styles.reportResults}>
-              <Text variant="titleSmall" style={styles.resultsTitle}>Report Results</Text>
-              {userReports.map((report: Report) => (
-                <Surface key={report.id} style={styles.reportItem}>
-                  <Text style={styles.reportDate}>{report.date}</Text>
-                  <View style={styles.reportStats}>
-                    <Text>Entries: {report.entries}</Text>
-                    <Text>Exits: {report.exits}</Text>
-                    <Text style={styles.revenue}>
-                      Revenue: {report.revenue.toLocaleString()} RWF
-                    </Text>
-                  </View>
+              <Text variant="titleSmall" style={styles.resultsTitle}>Report Results ({reportData.length})</Text>
+              {reportData.map((report: ParkingRecord) => (
+                <Surface key={report.id} style={styles.reportItem} elevation={1}>
+                  <Text style={styles.reportDate}>P: {report.plate_number}</Text>
+                  <Text>Time In: {report.time_in}</Text>
+                  {report.time_out && <Text>Time Out: {report.time_out}</Text>}
+                 
+                    <Text>Amount: {report.amount_paid} RWF</Text>
+                    <Text>Payment: {report.payment_status}</Text>
+                    {report.location && <Text>Location: {report.location}</Text>}
+                    
+                  
                 </Surface>
               ))}
             </View>
+          )}
+
+          {summary && (
+            <Surface style={styles.summaryBox} elevation={1}>
+              <Text>Total Entries: {summary.total_entries}</Text>
+              <Text>Total Revenue: {summary.total_revenue} RWF</Text>
+            </Surface>
           )}
         </Surface>
       )}
@@ -280,6 +325,12 @@ const styles = StyleSheet.create({
   reportStats: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+  },
+  summaryBox: {
+    padding: 12,
+    borderRadius: 6,
+    backgroundColor: '#fff',
+    marginTop: 12,
   },
   revenue: {
     color: '#2e7d32',
