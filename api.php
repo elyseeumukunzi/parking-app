@@ -129,7 +129,7 @@ if ($endpoint === 'save_parking') {
 
     }
     $insertParking = $mysqli->prepare("INSERT INTO parkings (vehicle_id, location_id, arrival_dates, arrival_time, departure_dates, departure_time, parking_status, charges,user_id, payment_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-    $insertParking->execute(array($vehicle_id, $location_id, $arrival_date, $arrival_time, $departure_date, $departure_time, $parking_status, $charges, $payment_status,$user_id));
+    $insertParking->execute(array($vehicle_id, $location_id, $arrival_date, $arrival_time, $departure_date, $departure_time, $parking_status, $charges, $user_id , $payment_status));
 
     if ($insertParking) {
         echo json_encode(["success" => true, "message" => "Parking registered successfully"]);
@@ -239,6 +239,7 @@ if ($endpoint === 'user_report') {
                 v.plate_number, 
                 CONCAT(p.arrival_dates, ' ', p.arrival_time) as time_in, 
                 CONCAT(p.departure_dates, ' ', p.departure_time) as time_out, 
+                p.parking_status,
                 p.payment_status,
                 p.charges as amount_paid,
                 u.name as user_name,
@@ -297,6 +298,10 @@ if ($endpoint === 'user_report') {
     $report_data = [];
     $total_entries = 0;
     $total_revenue = 0;
+    $completed_entries = 0;
+    $active_entries = 0;
+    $paid_entries = 0;
+    $unpaid_entries = 0;
     
     while ($row = $result->fetch_assoc()) {
         $report_data[] = [
@@ -304,6 +309,7 @@ if ($endpoint === 'user_report') {
             'plate_number' => $row['plate_number'],
             'time_in' => $row['time_in'],
             'time_out' => $row['time_out'],
+            'parking_status' => $row['parking_status'],
             'payment_status' => $row['payment_status'],
             'amount_paid' => (float)$row['amount_paid'],
             'user_name' => $row['user_name'],
@@ -312,6 +318,17 @@ if ($endpoint === 'user_report') {
         
         $total_entries++;
         $total_revenue += (float)$row['amount_paid'];
+        // Count stats
+        if ($row['parking_status'] === 'completed' || $row['time_out']) {
+            $completed_entries++; 
+        } else {
+            $active_entries++; 
+        }
+        if (strtolower($row['payment_status']) === 'paid') {
+            $paid_entries++; 
+        } else {
+            $unpaid_entries++; 
+        }
     }
 
     // Return the report data
@@ -321,6 +338,10 @@ if ($endpoint === 'user_report') {
         'summary' => [
             'total_entries' => $total_entries,
             'total_revenue' => $total_revenue,
+            'completed_entries' => $completed_entries,
+            'active_entries' => $active_entries,
+            'paid_entries' => $paid_entries,
+            'unpaid_entries' => $unpaid_entries,
             'date_range' => [
                 'from' => $from_date,
                 'to' => $to_date

@@ -27,6 +27,10 @@ interface ParkingRecord {
 interface ReportSummary {
   total_entries: number;
   total_revenue: number;
+  completed_entries: number;
+  active_entries: number;
+  paid_entries: number;
+  unpaid_entries: number;
   date_range: {
     from: string;
     to: string;
@@ -233,7 +237,11 @@ export default function ReportsScreen() {
           {summary && (
             <Surface style={styles.summaryBox} elevation={1}>
               <Text>Total Entries: {summary.total_entries}</Text>
-              <Text>Total Revenue: {summary.total_revenue} RWF</Text>
+              <Text>Completed: {summary.completed_entries}</Text>
+              <Text>Active: {summary.active_entries}</Text>
+              <Text>Paid: {summary.paid_entries}</Text>
+              <Text>Unpaid: {summary.unpaid_entries}</Text>
+              <Text style={{ marginTop: 4, fontWeight: 'bold' }}>Revenue: {summary.total_revenue} RWF</Text>
             </Surface>
           )}
         </Surface>
