@@ -19,8 +19,14 @@ function getJsonInput()
 
 $endpoint = isset($_GET['endpoint']) ? $_GET['endpoint'] : '';
 
+// -------------------------------------------------------------
+// Mista.io SMS helper
+// -------------------------------------------------------------
+// IMPORTANT: store real API key securely (env var, .env, server config)
+
 // Helper function to validate and format date
-function validateDate($date, $format = 'Y-m-d') {
+function validateDate($date, $format = 'Y-m-d')
+{
     $d = DateTime::createFromFormat($format, $date);
     return $d && $d->format($format) === $date;
 }
@@ -72,7 +78,7 @@ if ($endpoint === 'login') {
         if (password_verify($password, $row['password'])) {
             // For demo, token is user_id + uniqid
             $token = base64_encode($row['id'] . ':' . uniqid());
-            //return user id and token
+            // return user id and token
             echo json_encode(['token' => $token, 'user_id' => $row['id']]);
         } else {
             http_response_code(401);
@@ -84,8 +90,7 @@ if ($endpoint === 'login') {
     }
     exit();
 
-    //save parking infomrmation 
-
+    // save parking infomrmation
 }
 
 if ($endpoint === 'save_parking') {
@@ -105,42 +110,39 @@ if ($endpoint === 'save_parking') {
 
     if (!$plate_number || !$location_id || !$arrival_date || !$user_id) {
         http_response_code(400);
-        echo json_encode(["error" => "Missing required fields"]);
+        echo json_encode(['error' => 'Missing required fields']);
         exit();
     }
-    //check if the plate is already registered       
-    $stmt = $mysqli->prepare("SELECT id FROM vehicles WHERE plate_number = ?");
-    $stmt->bind_param("s", $plate_number);
+    // check if the plate is already registered
+    $stmt = $mysqli->prepare('SELECT id FROM vehicles WHERE plate_number = ?');
+    $stmt->bind_param('s', $plate_number);
     $stmt->execute();
     $result = $stmt->get_result();
     if ($result->num_rows > 0) {
         $vehicle = $result->fetch_assoc();
         $vehicle_id = $vehicle['id'];
     } else {
-
-        $insertVehicle = $mysqli->prepare("INSERT INTO vehicles (plate_number, phone, category_id, client_id) VALUES (?,?,?,?)");
+        $insertVehicle = $mysqli->prepare('INSERT INTO vehicles (plate_number, phone, category_id, client_id) VALUES (?,?,?,?)');
         $insertVehicle->execute(array($plate_number, $phone, $category_id, $user_id));
         if (!$insertVehicle) {
             http_response_code(500);
-            echo json_encode(["error" => "Failed to register vehicle"]);
+            echo json_encode(['error' => 'Failed to register vehicle']);
             exit();
         }
         $vehicle_id = $insertVehicle->insert_id;
-
     }
-    $insertParking = $mysqli->prepare("INSERT INTO parkings (vehicle_id, location_id, arrival_dates, arrival_time, departure_dates, departure_time, parking_status, charges,user_id, payment_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-    $insertParking->execute(array($vehicle_id, $location_id, $arrival_date, $arrival_time, $departure_date, $departure_time, $parking_status, $charges, $user_id , $payment_status));
+
+    $insertParking = $mysqli->prepare('INSERT INTO parkings (vehicle_id, location_id, arrival_dates, arrival_time, departure_dates, departure_time, parking_status, charges,user_id, payment_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    $insertParking->execute(array($vehicle_id, $location_id, $arrival_date, $arrival_time, $departure_date, $departure_time, $parking_status, $charges, $user_id, $payment_status));
 
     if ($insertParking) {
-        echo json_encode(["success" => true, "message" => "Parking registered successfully"]);
+        echo json_encode(['success' => true, 'message' => 'Parking registered successfully']);
     } else {
         http_response_code(500);
-        echo json_encode(["error" => "Failed to register parking"]);
+        echo json_encode(['error' => 'Failed to register parking']);
     }
 
     exit();
-
-
 }
 
 if ($endpoint === 'get_parking') {
@@ -148,12 +150,12 @@ if ($endpoint === 'get_parking') {
 
     if (empty($plate)) {
         http_response_code(400);
-        echo json_encode(["error" => "Plate number is required"]);
+        echo json_encode(['error' => 'Plate number is required']);
         exit();
     }
 
     // Prepare and execute query
-    $stmt = $mysqli->prepare("
+    $stmt = $mysqli->prepare('
         SELECT 
             p.id,
             v.plate_number,
@@ -172,9 +174,9 @@ if ($endpoint === 'get_parking') {
         LEFT JOIN locations l ON p.location_id = l.id
         WHERE v.plate_number = ?
         ORDER BY p.arrival_dates DESC, p.arrival_time DESC
-    ");
+    ');
 
-    $stmt->bind_param("s", $plate);
+    $stmt->bind_param('s', $plate);
     $stmt->execute();
 
     $result = $stmt->get_result();
@@ -190,6 +192,7 @@ if ($endpoint === 'get_parking') {
 if ($endpoint === 'remove_parking') {
     $data = getJsonInput();
     $plate = $data['plate_number'] ?? null;
+    $phoneInput = $data['phone_number'] ?? null;
     $parkingStatus = $data['parking_status'];
     $paymentStatus = $data['payment_status'] ?? 'unpaid';
     $departureTime = $data['departure_time'] ?? date('H:i:s');
@@ -197,14 +200,76 @@ if ($endpoint === 'remove_parking') {
     $departureDate = date('Y-m-d');
     $parkingId = $data['parking_id'];
 
-      
-        $stmt = $mysqli->prepare("UPDATE parkings SET parking_status = ?, departure_time = ?, payment_status = ?  WHERE id = ?");
-        $stmt->execute(array($parkingStatus, $departureTime, $paymentStatus, $parkingId));
-        echo json_encode(['message' => 'Parking status updated.']);
-    
-    exit;
+    $stmt = $mysqli->prepare('UPDATE parkings SET parking_status = ?, departure_time = ?, payment_status = ?  WHERE id = ?');
+    $stmt->execute(array($parkingStatus, $departureTime, $paymentStatus, $parkingId));
+    // select the vehicle information relevant to parking and number then we send the SMS
 
+    // Totals for that vehicle (paid vs unpaid)
+    $totalsStmt = $mysqli->prepare('
+        SELECT
+            SUM(CASE WHEN p.payment_status = "paid" THEN p.charges ELSE 0 END)  AS paid_total,
+            SUM(CASE WHEN p.payment_status = "unpaid" THEN p.charges ELSE 0 END) AS unpaid_total
+        FROM parkings p
+        JOIN vehicles v ON p.vehicle_id = v.id
+        WHERE v.plate_number = ?
+    ');
+    $totalsStmt->bind_param('s', $plate);
+    $totalsStmt->execute();
+    $totalsRes = $totalsStmt->get_result();
+    $paidTotal = 0;
+    $unpaidTotal = 0;
+    if ($totals = $totalsRes->fetch_assoc()) {
+        $paidTotal = (float) $totals['paid_total'];
+        $unpaidTotal = (float) $totals['unpaid_total'];
+    }
 
+    $stmt = $mysqli->prepare('SELECT phone, plate_number FROM vehicles WHERE plate_number = ?');
+    $stmt->bind_param('s', $plate);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $row = $result->fetch_assoc();
+    $phoneFromDb = $row['phone'];
+    $phone = '250' . ltrim($phoneFromDb, '0');
+    // If client provided phone_number, prefer it
+    if ($phoneInput) {
+        $clean = preg_replace('/[^0-9]/', '', $phoneInput);
+        if (strpos($clean, '250') === 0) {
+            $phone = $clean;
+        } else {
+            $phone = '250' . ltrim($clean, '0');
+        }
+    }
+    $plateNumber = $row['plate_number'];
+
+    if(!empty($phone))
+    {
+    $curl = curl_init();
+    curl_setopt_array($curl, array(
+        CURLOPT_URL => 'https://api.mista.io/sms',
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_ENCODING => '',
+        CURLOPT_MAXREDIRS => 10,
+        CURLOPT_TIMEOUT => 0,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+        CURLOPT_CUSTOMREQUEST => 'POST',
+        CURLOPT_POSTFIELDS => '{
+    "recipient":"' . $phone . '",
+    "sender_id":"E-Notifier",
+    "type":"plain",
+    "message": "Karibu muri MUSESU Ltd Parking Muhanga, Ikinyabiziga gifite ibirango' . $plate . ' Asigaye kwishyura ni ' . $unpaidTotal . ' uyu munsi' . $departureDate . 'Murakoze, Mugereyo Amahoro"
+                      }',
+        CURLOPT_HTTPHEADER => array(
+            'Content-Type: application/json',
+            'Authorization: Bearer 729|yWtAFSxIgWMmre0UlJQ92aHRxv4LzFRCVB6A2BgU'
+        ),
+    ));
+    $response = curl_exec($curl);
+    curl_close($curl);
+    echo $response . '' . $phone;
+}
+
+exit;
 }
 
 if ($endpoint === 'user_report') {
@@ -249,30 +314,30 @@ if ($endpoint === 'user_report') {
               JOIN users u ON v.client_id = u.id
               LEFT JOIN locations l ON p.location_id = l.id
               WHERE v.client_id = ?";
-    
+
     $params = [];
-    $types = "i"; // i for integer (user_id)
+    $types = 'i';  // i for integer (user_id)
     $params[] = &$user_id;
 
     // Add date range conditions if provided
     if ($from_date) {
-        $query .= " AND p.arrival_dates >= ?";
-        $types .= "s"; // s for string (date)
+        $query .= ' AND p.arrival_dates >= ?';
+        $types .= 's';  // s for string (date)
         $params[] = &$from_date;
     }
-    
+
     if ($to_date) {
-        $query .= " AND p.departure_dates <= ?";
-        $types .= "s"; // s for string (date)
-        $to_date_with_time = $to_date . ' 23:59:59'; // Include the entire end day
+        $query .= ' AND p.departure_dates <= ?';
+        $types .= 's';  // s for string (date)
+        $to_date_with_time = $to_date . ' 23:59:59';  // Include the entire end day
         $params[] = &$to_date_with_time;
     }
 
-    $query .= " ORDER BY p.arrival_dates DESC, p.arrival_time DESC";
+    $query .= ' ORDER BY p.arrival_dates DESC, p.arrival_time DESC';
 
     // Prepare and execute the statement
     $stmt = $mysqli->prepare($query);
-    
+
     if (!$stmt) {
         http_response_code(500);
         echo json_encode(['error' => 'Database error: ' . $mysqli->error]);
@@ -287,7 +352,7 @@ if ($endpoint === 'user_report') {
     // Execute query
     $stmt->execute();
     $result = $stmt->get_result();
-    
+
     if (!$result) {
         http_response_code(500);
         echo json_encode(['error' => 'Failed to fetch report data']);
@@ -302,7 +367,9 @@ if ($endpoint === 'user_report') {
     $active_entries = 0;
     $paid_entries = 0;
     $unpaid_entries = 0;
-    
+    $paid_revenue = 0;
+    $unpaid_revenue = 0;
+
     while ($row = $result->fetch_assoc()) {
         $report_data[] = [
             'id' => $row['id'],
@@ -311,23 +378,25 @@ if ($endpoint === 'user_report') {
             'time_out' => $row['time_out'],
             'parking_status' => $row['parking_status'],
             'payment_status' => $row['payment_status'],
-            'amount_paid' => (float)$row['amount_paid'],
+            'amount_paid' => (float) $row['amount_paid'],
             'user_name' => $row['user_name'],
             'location' => $row['parking_location']
         ];
-        
+
         $total_entries++;
-        $total_revenue += (float)$row['amount_paid'];
+        $total_revenue += (float) $row['amount_paid'];
         // Count stats
         if ($row['parking_status'] === 'completed' || $row['time_out']) {
-            $completed_entries++; 
+            $completed_entries++;
         } else {
-            $active_entries++; 
+            $active_entries++;
         }
         if (strtolower($row['payment_status']) === 'paid') {
-            $paid_entries++; 
+            $paid_entries++;
+            $paid_revenue += (float) $row['amount_paid'];
         } else {
-            $unpaid_entries++; 
+            $unpaid_entries++;
+            $unpaid_revenue += (float) $row['amount_paid'];
         }
     }
 
@@ -342,6 +411,8 @@ if ($endpoint === 'user_report') {
             'active_entries' => $active_entries,
             'paid_entries' => $paid_entries,
             'unpaid_entries' => $unpaid_entries,
+            'paid_revenue' => $paid_revenue,
+            'unpaid_revenue' => $unpaid_revenue,
             'date_range' => [
                 'from' => $from_date,
                 'to' => $to_date
@@ -353,7 +424,7 @@ if ($endpoint === 'user_report') {
 
 if ($endpoint === 'list_users') {
     // Retrieve all users
-    $result = $mysqli->query("SELECT id, name, email FROM users ORDER BY name ASC");
+    $result = $mysqli->query('SELECT id, name, email FROM users ORDER BY name ASC');
     if (!$result) {
         http_response_code(500);
         echo json_encode(['error' => 'Database error: ' . $mysqli->error]);
@@ -363,13 +434,108 @@ if ($endpoint === 'list_users') {
     $users = [];
     while ($row = $result->fetch_assoc()) {
         $users[] = [
-            'id' => (int)$row['id'],
+            'id' => (int) $row['id'],
             'name' => $row['name'],
             'email' => $row['email']
         ];
     }
 
     echo json_encode(['success' => true, 'data' => $users]);
+    exit();
+}
+
+if ($endpoint === 'today_stats') {
+    $data = getJsonInput();
+    $user_id = intval($data['user_id'] ?? 0);
+    $today = date('Y-m-d');
+
+    if (!$user_id) {
+        http_response_code(400);
+        echo json_encode(['error' => 'User ID is required']);
+        exit();
+    }
+
+    // Get today's stats
+    $stmt = $mysqli->prepare('
+        SELECT 
+            COUNT(*) as total_entries,
+            SUM(CASE WHEN p.payment_status = "paid" THEN 1 ELSE 0 END) as paid_entries,
+            SUM(CASE WHEN p.payment_status = "unpaid" THEN 1 ELSE 0 END) as unpaid_entries,
+            SUM(CASE WHEN p.payment_status = "paid" THEN p.charges ELSE 0 END) as total_revenue,
+            SUM(CASE WHEN p.parking_status = "active" THEN 1 ELSE 0 END) as active_entries
+        FROM parkings p
+        JOIN vehicles v ON p.vehicle_id = v.id
+        WHERE v.client_id = ? 
+        AND DATE(p.arrival_dates) = ?
+    ');
+
+    $stmt->bind_param('is', $user_id, $today);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $stats = $result->fetch_assoc();
+
+    // Get busiest hour
+    $hourStmt = $mysqli->prepare('
+        SELECT 
+            HOUR(arrival_time) as hour,
+            COUNT(*) as count
+        FROM parkings p
+        JOIN vehicles v ON p.vehicle_id = v.id
+        WHERE v.client_id = ? 
+        AND DATE(arrival_dates) = ?
+        GROUP BY HOUR(arrival_time)
+        ORDER BY count DESC
+        LIMIT 1
+    ');
+
+    $hourStmt->bind_param('is', $user_id, $today);
+    $hourStmt->execute();
+    $hourResult = $hourStmt->get_result();
+    $busiestHour = 'N/A';
+    
+    if ($hourRow = $hourResult->fetch_assoc()) {
+        $hour = intval($hourRow['hour']);
+        $busiestHour = sprintf("%02d:00 - %02d:00", $hour, ($hour + 1) % 24);
+    }
+
+    // Get parking location stats
+    $locationStmt = $mysqli->prepare('
+        SELECT 
+            l.location as name,
+            COUNT(p.id) as total,
+            SUM(CASE WHEN p.parking_status = "active" THEN 1 ELSE 0 END) as available
+        FROM locations l
+        LEFT JOIN parkings p ON l.id = p.location_id 
+            AND DATE(p.arrival_dates) = ? 
+            AND p.parking_status = "active"
+        GROUP BY l.id, l.location
+    ');
+
+    $locationStmt->bind_param('s', $today);
+    $locationStmt->execute();
+    $locationResult = $locationStmt->get_result();
+    $locations = [];
+
+    while ($loc = $locationResult->fetch_assoc()) {
+        $locations[] = [
+            'name' => $loc['name'],
+            'available' => intval($loc['available']),
+            'total' => intval($loc['total'])
+        ];
+    }
+
+    echo json_encode([
+        'success' => true,
+        'stats' => [
+            'total_entries' => intval($stats['total_entries'] ?? 0),
+            'paid_entries' => intval($stats['paid_entries'] ?? 0),
+            'unpaid_entries' => intval($stats['unpaid_entries'] ?? 0),
+            'total_revenue' => floatval($stats['total_revenue'] ?? 0),
+            'active_entries' => intval($stats['active_entries'] ?? 0),
+            'busiest_hour' => $busiestHour
+        ],
+        'locations' => $locations
+    ]);
     exit();
 }
 

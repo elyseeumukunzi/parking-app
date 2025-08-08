@@ -31,6 +31,8 @@ interface ReportSummary {
   active_entries: number;
   paid_entries: number;
   unpaid_entries: number;
+  paid_revenue: number;
+  unpaid_revenue: number;
   date_range: {
     from: string;
     to: string;
@@ -241,7 +243,9 @@ export default function ReportsScreen() {
               <Text>Active: {summary.active_entries}</Text>
               <Text>Paid: {summary.paid_entries}</Text>
               <Text>Unpaid: {summary.unpaid_entries}</Text>
-              <Text style={{ marginTop: 4, fontWeight: 'bold' }}>Revenue: {summary.total_revenue} RWF</Text>
+              <Text style={{ marginTop: 4 }}>Revenue - Paid: {summary.paid_revenue} RWF</Text>
+              <Text>Revenue - Unpaid: {summary.unpaid_revenue} RWF</Text>
+              <Text style={{ marginTop: 4, fontWeight: 'bold' }}>Revenue - Total: {summary.total_revenue} RWF</Text>
             </Surface>
           )}
         </Surface>

@@ -15,6 +15,7 @@ export default function SearchScreen() {
   const [localResults, setLocalResults] = React.useState<any[]>([]);
   const [statusChanged, setStatusChanged] = React.useState(false);
   const [parkingId, setParkingId] = React.useState('');
+  const [phoneNumber, setPhoneNumber] = React.useState('');
 
   React.useEffect(() => {
     setLocalResults(results.map(r => ({ ...r })));
@@ -24,6 +25,7 @@ export default function SearchScreen() {
     Keyboard.dismiss();
     setLoading(true);
     setSearched(false);
+    setPhoneNumber(''); // Reset phone number on new search
 
     try {
       const response = await fetch(
@@ -51,6 +53,7 @@ export default function SearchScreen() {
         payment: item.charges || '0',
         status: item.payment_status,
         date: item.arrival_dates,
+        phone: item.phone,
         parkingStatus: item.parking_status,
       }));
 
@@ -70,12 +73,14 @@ export default function SearchScreen() {
     setEditingIdx(idx);
     setEditTimeOut(result.timeOut || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
     setEditPaymentStatus(result.status === 'paid' ? 'paid' : 'unpaid');
+    setPhoneNumber(result.phone || '');
   };
 
   const handleCancel = () => {
     setEditingIdx(null);
     setEditTimeOut('');
     setEditPaymentStatus('paid');
+    setPhoneNumber('');
   };
 
 const handleConfirm = async (idx: number) => {
@@ -99,6 +104,7 @@ const handleConfirm = async (idx: number) => {
     const response = await axios.post(`${CONFIG.API_BASE_URL}remove_parking`, {
       plate_number: updatedEntry.plate,
       parking_id: updatedEntry.parkingId,
+      phone_number: phoneNumber,
       departure_time: updatedEntry.timeOut,
       payment_status: updatedEntry.status,
       parking_status: updatedEntry.parkingStatus,
@@ -108,6 +114,7 @@ const handleConfirm = async (idx: number) => {
 
     setEditingIdx(null);
     setStatusChanged(true);
+    setPhoneNumber('');
   } catch (error) {
     console.error('Error updating departure info:', error);
   }
@@ -184,11 +191,13 @@ const handleConfirm = async (idx: number) => {
                 {isEditing && (
                   <View>
                     <Text style={{ marginTop: 10 }}>Confirm Departure:</Text>
+                    
                     <TextInput
-                      label="Parking Id"
-                      value={parkingId}
-                      onChangeText={setParkingId}
+                      label="Phone Number"
+                      value={phoneNumber}
+                      onChangeText={setPhoneNumber}
                       mode="outlined"
+                      keyboardType="phone-pad"
                       style={{ marginTop: 8 }}
                     />
 
