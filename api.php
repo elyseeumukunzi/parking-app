@@ -1,13 +1,13 @@
 <?php
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: POST, OPTIONS');
+header('Access-Control-Allow-Methods: POST,GET, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type');
 
-$mysqli = new mysqli('localhost', 'root', '', 'parking-app');
+$mysqli = new mysqli('localhost', 'stanawgx_elysee', 'elyseeumukunzi@gmail.com', 'stanawgx_parking-app');
 if ($mysqli->connect_errno) {
     http_response_code(500);
-    echo json_encode(['error' => 'Failed to connect to database']);
+    echo json_encode(['error' => $mysqli->connect_error]);
     exit();
 }
 
@@ -98,9 +98,10 @@ if ($endpoint === 'save_parking') {
     $user_id = $data['user_id'] ?? '';
     $plate_number = $data['plate_number'] ?? null;
     $location_id = $data['location_id'] ?? null;
-    $arrival_date = $data['date'] ?? date('Y-m-d');
-    $arrival_time = $data['arrival_time'] ?? null;
-    $departure_date = $data['departure_date'] ?? null;
+    // Ensure we're getting the complete date in YYYY-MM-DD format
+    $arrival_date = !empty($data['date']) ? date('Y-m-d', strtotime($data['date'])) : date('Y-m-d');
+    $arrival_time = $data['arrival_time'] ?? date('H:i:s');
+    $departure_date = !empty($data['departure_date']) ? date('Y-m-d', strtotime($data['departure_date'])) : null;
     $departure_time = $data['departure_time'] ?? null;
     $parking_status = $data['parking_status'] ?? 'active';
     $payment_status = $data['status'] ?? 'unpaid';
@@ -123,7 +124,8 @@ if ($endpoint === 'save_parking') {
         $vehicle_id = $vehicle['id'];
     } else {
         $insertVehicle = $mysqli->prepare('INSERT INTO vehicles (plate_number, phone, category_id, client_id) VALUES (?,?,?,?)');
-        $insertVehicle->execute(array($plate_number, $phone, $category_id, $user_id));
+        $insertVehicle->bind_param('ssii', $plate_number, $phone, $category_id, $user_id);
+        $insertVehicle->execute();
         if (!$insertVehicle) {
             http_response_code(500);
             echo json_encode(['error' => 'Failed to register vehicle']);
@@ -132,8 +134,54 @@ if ($endpoint === 'save_parking') {
         $vehicle_id = $insertVehicle->insert_id;
     }
 
-    $insertParking = $mysqli->prepare('INSERT INTO parkings (vehicle_id, location_id, arrival_dates, arrival_time, departure_dates, departure_time, parking_status, charges,user_id, payment_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
-    $insertParking->execute(array($vehicle_id, $location_id, $arrival_date, $arrival_time, $departure_date, $departure_time, $parking_status, $charges, $user_id, $payment_status));
+    // Log the values being inserted for debugging
+    error_log("Inserting parking record with date: " . $arrival_date . " and time: " . $arrival_time);
+    
+    // Prepare the SQL query with explicit date and time fields
+    $query = "INSERT INTO parkings (
+        vehicle_id, 
+        location_id, 
+        arrival_dates, 
+        arrival_time, 
+        departure_dates, 
+        departure_time, 
+        parking_status, 
+        charges,
+        user_id, 
+        payment_status
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+    
+    $insertParking = $mysqli->prepare($query);
+    if (!$insertParking) {
+        http_response_code(500);
+        echo json_encode(['error' => 'Database error: ' . $mysqli->error]);
+        exit();
+    }
+    
+    // Ensure dates are properly formatted for MySQL
+    $formatted_arrival_date = date('Y-m-d', strtotime($arrival_date));
+    $formatted_departure_date = !empty($departure_date) ? date('Y-m-d', strtotime($departure_date)) : null;
+    
+    // Bind parameters with proper types
+    $insertParking->bind_param(
+        'iisssssdis', 
+        $vehicle_id, 
+        $location_id, 
+        $formatted_arrival_date, 
+        $arrival_time, 
+        $formatted_departure_date, 
+        $departure_time, 
+        $parking_status, 
+        $charges,
+        $user_id, 
+        $payment_status
+    );
+    
+    if (!$insertParking->execute()) {
+        http_response_code(500);
+        echo json_encode(['error' => 'Failed to save parking: ' . $insertParking->error]);
+        exit();
+    }
 
     if ($insertParking) {
         echo json_encode(['success' => true, 'message' => 'Parking registered successfully']);
@@ -201,7 +249,8 @@ if ($endpoint === 'remove_parking') {
     $parkingId = $data['parking_id'];
 
     $stmt = $mysqli->prepare('UPDATE parkings SET parking_status = ?, departure_time = ?, payment_status = ?  WHERE id = ?');
-    $stmt->execute(array($parkingStatus, $departureTime, $paymentStatus, $parkingId));
+    $stmt->bind_param('ssis', $parkingStatus, $departureTime, $paymentStatus, $parkingId);
+    $stmt->execute();
     // select the vehicle information relevant to parking and number then we send the SMS
 
     // Totals for that vehicle (paid vs unpaid)
@@ -241,35 +290,34 @@ if ($endpoint === 'remove_parking') {
     }
     $plateNumber = $row['plate_number'];
 
-    if(!empty($phone))
-    {
-    $curl = curl_init();
-    curl_setopt_array($curl, array(
-        CURLOPT_URL => 'https://api.mista.io/sms',
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_ENCODING => '',
-        CURLOPT_MAXREDIRS => 10,
-        CURLOPT_TIMEOUT => 0,
-        CURLOPT_FOLLOWLOCATION => true,
-        CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-        CURLOPT_CUSTOMREQUEST => 'POST',
-        CURLOPT_POSTFIELDS => '{
+    if (!empty($phone)) {
+        $curl = curl_init();
+        curl_setopt_array($curl, array(
+            CURLOPT_URL => 'https://api.mista.io/sms',
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_ENCODING => '',
+            CURLOPT_MAXREDIRS => 10,
+            CURLOPT_TIMEOUT => 0,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+            CURLOPT_CUSTOMREQUEST => 'POST',
+            CURLOPT_POSTFIELDS => '{
     "recipient":"' . $phone . '",
     "sender_id":"E-Notifier",
     "type":"plain",
     "message": "Karibu muri MUSESU Ltd Parking Muhanga, Ikinyabiziga gifite ibirango' . $plate . ' Asigaye kwishyura ni ' . $unpaidTotal . ' uyu munsi' . $departureDate . 'Murakoze, Mugereyo Amahoro"
                       }',
-        CURLOPT_HTTPHEADER => array(
-            'Content-Type: application/json',
-            'Authorization: Bearer 729|yWtAFSxIgWMmre0UlJQ92aHRxv4LzFRCVB6A2BgU'
-        ),
-    ));
-    $response = curl_exec($curl);
-    curl_close($curl);
-    echo $response . '' . $phone;
-}
+            CURLOPT_HTTPHEADER => array(
+                'Content-Type: application/json',
+                'Authorization: Bearer 729|yWtAFSxIgWMmre0UlJQ92aHRxv4LzFRCVB6A2BgU'
+            ),
+        ));
+        $response = curl_exec($curl);
+        curl_close($curl);
+        echo $response . '' . $phone;
+    }
 
-exit;
+    exit;
 }
 
 if ($endpoint === 'user_report') {
@@ -444,6 +492,24 @@ if ($endpoint === 'list_users') {
     exit();
 }
 
+if ($endpoint === 'list_locations') {
+    // Debug endpoint to list all locations
+    $result = $mysqli->query('SELECT * FROM locations');
+    if (!$result) {
+        http_response_code(500);
+        echo json_encode(['error' => 'Failed to fetch locations: ' . $mysqli->error]);
+        exit();
+    }
+    
+    $locations = [];
+    while ($row = $result->fetch_assoc()) {
+        $locations[] = $row;
+    }
+    
+    echo json_encode(['success' => true, 'locations' => $locations]);
+    exit();
+}
+
 if ($endpoint === 'today_stats') {
     $data = getJsonInput();
     $user_id = intval($data['user_id'] ?? 0);
@@ -492,10 +558,10 @@ if ($endpoint === 'today_stats') {
     $hourStmt->execute();
     $hourResult = $hourStmt->get_result();
     $busiestHour = 'N/A';
-    
+
     if ($hourRow = $hourResult->fetch_assoc()) {
         $hour = intval($hourRow['hour']);
-        $busiestHour = sprintf("%02d:00 - %02d:00", $hour, ($hour + 1) % 24);
+        $busiestHour = sprintf('%02d:00 - %02d:00', $hour, ($hour + 1) % 24);
     }
 
     // Get parking location stats

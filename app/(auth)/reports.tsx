@@ -222,12 +222,12 @@ export default function ReportsScreen() {
               <Text variant="titleSmall" style={styles.resultsTitle}>Report Results ({reportData.length})</Text>
               {reportData.map((report: ParkingRecord) => (
                 <Surface key={report.id} style={styles.reportItem} elevation={1}>
-                  <Text style={styles.reportDate}>P: {report.plate_number}</Text>
-                  <Text>Time In: {report.time_in}</Text>
-                  {report.time_out && <Text>Time Out: {report.time_out}</Text>}
+                  <Text style={styles.reportDate}>Plake: {report.plate_number}</Text>
+                  <Text>Igihe Yaziye: {report.time_in}</Text>
+                  {report.time_out && <Text>Igihe yasohokeye: {report.time_out}</Text>}
                  
-                    <Text>Amount: {report.amount_paid} RWF</Text>
-                    <Text>Payment: {report.payment_status}</Text>
+                    <Text>Igiciro: {report.amount_paid} RWF</Text>
+                    <Text>Ubwishyu: {report.payment_status}</Text>
                     {report.location && <Text>Location: {report.location}</Text>}
                     
                   
@@ -238,14 +238,14 @@ export default function ReportsScreen() {
 
           {summary && (
             <Surface style={styles.summaryBox} elevation={1}>
-              <Text>Total Entries: {summary.total_entries}</Text>
-              <Text>Completed: {summary.completed_entries}</Text>
-              <Text>Active: {summary.active_entries}</Text>
-              <Text>Paid: {summary.paid_entries}</Text>
-              <Text>Unpaid: {summary.unpaid_entries}</Text>
-              <Text style={{ marginTop: 4 }}>Revenue - Paid: {summary.paid_revenue} RWF</Text>
-              <Text>Revenue - Unpaid: {summary.unpaid_revenue} RWF</Text>
-              <Text style={{ marginTop: 4, fontWeight: 'bold' }}>Revenue - Total: {summary.total_revenue} RWF</Text>
+              <Text>Ibyinjiye byose: {summary.total_entries}</Text>
+              <Text>Ibyagiye: {summary.completed_entries}</Text>
+              <Text>Ibigihari: {summary.active_entries}</Text>
+              <Text>Ibyishyuye: {summary.paid_entries}</Text>
+              <Text>Ibitishyuye: {summary.unpaid_entries}</Text>
+              <Text style={{ marginTop: 4 }}>Amafaranga yishyuwe: {summary.paid_revenue} RWF</Text>
+              <Text>Amafaranga atishyuwe: {summary.unpaid_revenue} RWF</Text>
+              <Text style={{ marginTop: 4, fontWeight: 'bold' }}>Amafaranga Yakorewe: {summary.total_revenue} RWF</Text>
             </Surface>
           )}
         </Surface>

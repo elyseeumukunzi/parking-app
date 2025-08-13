@@ -18,55 +18,55 @@ export default function AddParkingScreen() {
   const [status, setStatus] = useState('paid');
   const [user_id, setUserId] = useState('');
   const [submitted, setSubmitted] = useState(false);
-  const [location, setLocation] = useState(''); 
+  const [location, setLocation] = useState('');
   const now = new Date();
-  
+
 
   const handleSubmit = async () => {
-  try {
-    // Fetch user ID from AsyncStorage
-    const storedUserId = await AsyncStorage.getItem('userId');
-    if (!storedUserId) {
-      Alert.alert('Error', 'User ID not found. Please log in again.');
-      return;
+    try {
+      // Fetch user ID from AsyncStorage
+      const storedUserId = await AsyncStorage.getItem('userId');
+      if (!storedUserId) {
+        Alert.alert('Error', 'User ID not found. Please log in again.');
+        return;
+      }
+
+      setUserId(storedUserId);
+      setSubmitted(true);
+
+      // Prepare request data
+      const requestData = {
+        plate_number: plate,
+        category: category,  // assuming your backend handles this
+        phone: phone,
+        arrival_date: date,
+        payment: payment,
+        payment_status: status,
+        user_id: storedUserId,
+        arrival_time: now.toTimeString().split(' ')[0],
+        departure_date: date,
+        departure_time: '',
+        parking_status: 'active',
+        location_id: location,
+      };
+
+      // Send data to the API
+      const response = await axios.post(`${CONFIG.API_BASE_URL}save_parking`, requestData);
+
+      if (response.data.success) {
+        Alert.alert('Success', 'Parking registered successfully!');
+        //navigate to search 
+        router.replace('/(tabs)/search'); // Navigate to search screen
+      } else {
+        Alert.alert('Error', response.data.error || 'Something went wrong.');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to submit. ' + error.message);
+    } finally {
+      // Reset submission flag after 2 seconds
+      setTimeout(() => setSubmitted(false), 2000);
     }
-
-    setUserId(storedUserId);
-    setSubmitted(true);
-
-    // Prepare request data
-    const requestData = {
-      plate_number: plate,
-      category: category,  // assuming your backend handles this
-      phone: phone,
-      arrival_date: date,
-      payment: payment,
-      payment_status: status,
-      user_id: storedUserId,
-      arrival_time: now.toTimeString().split(' ')[0],
-      departure_date: date,
-      departure_time: '',
-      parking_status: 'active',
-      location_id: location, 
-    };
-
-    // Send data to the API
-    const response = await axios.post(`${CONFIG.API_BASE_URL}save_parking`, requestData);
-
-    if (response.data.success) {
-      Alert.alert('Success', 'Parking registered successfully!');
-      //navigate to search 
-      router.replace('/(tabs)/search'); // Navigate to search screen
-    } else {
-      Alert.alert('Error', response.data.error || 'Something went wrong.');
-    }
-  } catch (error) {
-    Alert.alert('Error', 'Failed to submit. ' + error.message);
-  } finally {
-    // Reset submission flag after 2 seconds
-    setTimeout(() => setSubmitted(false), 2000);
-  }
-};
+  };
 
   return (
     <ScrollView contentContainerStyle={styles.scrollContent}>
@@ -128,12 +128,22 @@ export default function AddParkingScreen() {
           </View>
         </RadioButton.Group>
 
-         <Text variant="titleSmall" style={styles.label}>Location on Muhanga Modern Market </Text>
+        <Text variant="titleSmall" style={styles.label}>Location on Muhanga Modern Market </Text>
         <RadioButton.Group onValueChange={setLocation} value={location}>
           <View style={styles.radioRow}>
             <RadioButton.Item label="Imbere" value="1" />
             <RadioButton.Item label="Inyuma" value="2" />
           </View>
+          <Text variant="titleSmall" style={styles.label}>Location in Kamonyi Markets </Text>
+
+          <View style={styles.radioRow}>
+            <RadioButton.Item label="Gashyushya" value="3" />
+            <RadioButton.Item label="Mugina" value="4" />
+
+          </View>
+
+
+
         </RadioButton.Group>
 
         <Button mode="contained" onPress={handleSubmit} style={styles.button}>
